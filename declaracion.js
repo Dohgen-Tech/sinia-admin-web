@@ -40,6 +40,13 @@
     const rt = runtime();
     if (!rt?.isReady() || rt.isDemo()) return;
     const client = rt.getClient();
+    if(rt.isSandbox?.()){
+      const {data,error}=await client.from("sinia_demo_declarations").select("transcript,updated_at").eq("claim_number",caseNumber).maybeSingle();
+      if(!error&&data&&activeCase?.number===caseNumber&&!drafts.has(caseNumber)){
+        area.value=data.transcript||"";status("Declaración de prueba recuperada desde Supabase.");
+      }
+      return;
+    }
     try {
       const { data: claim, error: claimError } = await client
         .from("sinia_claims").select("id").eq("claim_number", caseNumber).maybeSingle();
@@ -175,6 +182,17 @@
     if (!rt?.isReady() || rt.isDemo())
       return status("Modo demostración: el texto solo permanece en esta pestaña. Para guardarlo en Supabase necesitás un usuario real autorizado.");
     const client = rt.getClient();
+    if(rt.isSandbox?.()){
+      const button=get("saveDeclaration");button.disabled=true;
+      status("Guardando declaración de prueba...");
+      try{
+       const {error}=await client.from("sinia_demo_declarations").upsert({claim_number:activeCase.number,transcript,status:"Pendiente revisión Mica",updated_at:new Date().toISOString()},{onConflict:"claim_number"});
+       if(error)throw error;
+       status("Declaración guardada en Supabase para "+activeCase.number+". Pendiente revisión Mica.");
+      }catch(err){status("No se pudo guardar: "+(err.message||"error"));}
+      finally{button.disabled=false;}
+      return;
+    }
     const button = get("saveDeclaration");
     button.disabled = true;
     status("Guardando borrador en Supabase...");
