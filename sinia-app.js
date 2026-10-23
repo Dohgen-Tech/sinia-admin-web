@@ -21,7 +21,7 @@ signUpButton.addEventListener("click",async()=>{
  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))return void(err.textContent="Para registrarte, escribí tu correo electrónico en Usuario.");
  if(password.length<12)return void(err.textContent="Usá una contraseña segura de al menos 12 caracteres.");
  signUpButton.disabled=true;err.textContent="Registrando usuario de prueba...";
- try{const res=await client.auth.signUp({email,password});if(res.error)throw res.error;err.textContent=res.data.session?"Usuario creado. Ingresá con tu correo para guardar datos.":"Cuenta creada. Revisá tu correo y confirmá el registro; después volvé e ingresá.";if(res.data.session){const m=await client.from("sinia_members").select("role").maybeSingle();if(m.data?.role==="demo"){demoSession=false;userRole="demo";enter();}}}
+ try{const res=await client.auth.signUp({email,password});if(res.error)throw res.error;try{localStorage.setItem("sinia-demo-email",email)}catch(_){ }err.textContent=res.data.session?"Usuario creado. Podés ingresar con tu correo o con el alias 123406, usando la contraseña segura.":"Cuenta creada. Confirmá el correo antes de ingresar. Luego podrás escribir 123406 como usuario en este navegador, con tu contraseña segura.";if(res.data.session){const m=await client.from("sinia_members").select("role").maybeSingle();if(m.data?.role==="demo"){demoSession=false;userRole="demo";enter();}}}
  catch(e){err.textContent="No se pudo crear el acceso: "+(e.message||"error");}
  finally{signUpButton.disabled=false;}
 });
@@ -39,7 +39,7 @@ login.addEventListener("submit",async e=>{
  const u=document.getElementById("uSINIA").value.trim(),p=document.getElementById("pSINIA").value,err=document.getElementById("authError");err.textContent="";
  if((u==="123456"||u==="123406")&&p==="123456"){demoSession=true;userRole=null;enter();return;}
  if(!ready){err.textContent="No está conectada la base de datos.";return;}
- const {error}=await client.auth.signInWithPassword({email:u,password:p});
+ const email=((u==="123406"||u==="123456")&&p!=="123456")?(localStorage.getItem("sinia-demo-email")||u):u;const {error}=await client.auth.signInWithPassword({email,password:p});
  if(error){err.textContent="No se pudo iniciar sesión. Comprobá el correo y la contraseña.";return;}
  const {data, error:memberError}=await client.from("sinia_members").select("role").maybeSingle();
  if(memberError||!data){await client.auth.signOut();err.textContent="Cuenta sin acceso autorizado.";return;}
