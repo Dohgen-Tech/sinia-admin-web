@@ -131,7 +131,7 @@
     const replacements={};
     for(const tag of detectedTags)replacements[tag]=data[aliases[normalize(tag)]]??missing;
     doc.render(replacements);
-    return doc.toBlob();
+    return new Blob([doc.toBlob()],{type:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"});
   }
   async function makePdf(file,data){
     const pdf=await window.PDFLib.PDFDocument.load(await file.arrayBuffer());
