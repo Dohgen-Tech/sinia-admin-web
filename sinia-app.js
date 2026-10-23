@@ -104,5 +104,28 @@ if(userRole==="demo"){
   return;
 }
 const claimNo=val("id"),name=val("cliente");if(!claimNo||!name){status.textContent="Completá número de siniestro y cliente.";return;}status.textContent="Guardando en Supabase...";try{const member=await client.from("sinia_members").select("user_id").limit(1);if(!member.data?.length)throw Error("Sin permisos SINIA");let customer=await client.from("sinia_clients").select("id").eq("full_name",name).limit(1);if(customer.error)throw customer.error;let clientId=customer.data?.[0]?.id;if(!clientId){const saved=await client.from("sinia_clients").insert({full_name:name,client_number:val("num")||null}).select("id").single();if(saved.error)throw saved.error;clientId=saved.data.id;}let insurerId=null,policyId=null;const insurerName=val("insurerSINIA"),policyNumber=val("policySINIA");if(insurerName){let ir=await client.from("sinia_insurers").select("id").eq("name",insurerName).limit(1);if(ir.error)throw ir.error;insurerId=ir.data?.[0]?.id;if(!insurerId){ir=await client.from("sinia_insurers").insert({name:insurerName}).select("id").single();if(ir.error)throw ir.error;insurerId=ir.data.id;}}if(policyNumber){let pr=await client.from("sinia_policies").select("id").eq("client_id",clientId).eq("policy_number",policyNumber).limit(1);if(pr.error)throw pr.error;policyId=pr.data?.[0]?.id;if(!policyId){pr=await client.from("sinia_policies").insert({client_id:clientId,insurer_id:insurerId,policy_number:policyNumber,branch:val("ramo")||"A determinar"}).select("id").single();if(pr.error)throw pr.error;policyId=pr.data.id;}}const payload={claim_number:claimNo,client_id:clientId,policy_id:policyId,incident_date:val("dateSINIA")||null,incident_location:val("placeSINIA")||null,description:val("descSINIA")||val("nota"),status:"Pendiente revisión Mica",liability:val("liabilitySINIA"),coverage:val("coverageSINIA"),coverage_reasons:val("reasonSINIA")};const saved=await client.from("sinia_claims").upsert(payload,{onConflict:"claim_number"}).select("id").single();if(saved.error)throw saved.error;status.textContent="Siniestro guardado en Supabase. Pendiente revisión Mica.";await loadData();}catch(e){status.textContent="No se pudo guardar: "+(e.message||"error");}},true);
-document.getElementById("saveDocumentSINIA").addEventListener("click",async()=>{const out=document.getElementById("uploadStatus");if(!ready||demoSession){out.textContent="Modo demostración: documentos no guardados.";return;}const url=val("driveLinkSINIA");const selected=document.getElementById("adjuntos").files[0]||document.getElementById("docFile").files[0];if(!url&&!selected){out.textContent="Seleccioná un archivo o pegá un link de Drive.";return;}out.textContent="Guardando...";try{let path=null;if(selected){path=crypto.randomUUID()+"/"+selected.name.replace(/[^a-zA-Z0-9._-]/g,"_");const up=await client.storage.from("sinia-private").upload(path,selected,{upsert:false});if(up.error)throw up.error;}const row={title:selected?.name||"Documento de Drive",category:val("fileCategorySINIA"),storage_path:path,drive_url:url||null};const saved=await client.from("sinia_documents").insert(row);if(saved.error)throw saved.error;out.textContent="Documento registrado correctamente.";}catch(e){out.textContent="Error: "+(e.message||"No se pudo guardar");}});
+document.getElementById("saveDocumentSINIA").addEventListener("click",async()=>{const out=document.getElementById("uploadStatus");if(!ready||demoSession){out.textContent="Modo demostración: documentos no guardados.";return;}const url=val("driveLinkSINIA");const selected=document.getElementById("adjuntos").files[0]||document.getElementById("docFile").files[0];if(!url&&!selected){out.textContent="Seleccioná un archivo o pegá un link de Drive.";return;}out.textContent="Guardando...";
+if(userRole==="demo"){
+ const claim_number=val("id").toUpperCase();
+ if(!/^[A-Z0-9-]{3,32}$/.test(claim_number)){out.textContent="Primero seleccioná o escribí un número de siniestro válido.";return;}
+ const known=(window.SINIA_DEMO_CLAIMS||[]).some(x=>x.claim_number===claim_number);
+ if(!known){out.textContent="Guardá primero el siniestro desde Nuevo siniestro.";return;}
+ let storage_path=null;
+ try{
+  if(selected){
+   if(selected.size>1048576)throw Error("Máximo 1 MB por archivo de prueba.");
+   if(!["application/pdf","image/png","image/jpeg","text/plain"].includes(selected.type))throw Error("Solo PDF, PNG, JPG o TXT para pruebas.");
+   storage_path=claim_number+"/"+crypto.randomUUID()+"-"+selected.name.replace(/[^a-zA-Z0-9._-]/g,"_").slice(0,60);
+   const up=await client.storage.from("sinia-demo-files").upload(storage_path,selected,{contentType:selected.type,upsert:false});
+   if(up.error)throw up.error;
+  }
+  if(url&&!/^https:\/\/(drive\.google\.com|docs\.google\.com)\//i.test(url))throw Error("El enlace debe ser de Google Drive/Docs.");
+  const r=await client.from("sinia_demo_documents").insert({claim_number,category:val("fileCategorySINIA"),title:selected?.name||"Documento de Drive",storage_path,drive_url:url||null});
+  if(r.error)throw r.error;
+  out.textContent="Documento de prueba guardado en Supabase.";
+  await loadData();
+ }catch(e){if(storage_path)await client.storage.from("sinia-demo-files").remove([storage_path]);out.textContent="No se pudo guardar: "+(e.message||"error");}
+ return;
+}
+try{let path=null;if(selected){path=crypto.randomUUID()+"/"+selected.name.replace(/[^a-zA-Z0-9._-]/g,"_");const up=await client.storage.from("sinia-private").upload(path,selected,{upsert:false});if(up.error)throw up.error;}const row={title:selected?.name||"Documento de Drive",category:val("fileCategorySINIA"),storage_path:path,drive_url:url||null};const saved=await client.from("sinia_documents").insert(row);if(saved.error)throw saved.error;out.textContent="Documento registrado correctamente.";}catch(e){out.textContent="Error: "+(e.message||"No se pudo guardar");}});
 })();
