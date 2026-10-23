@@ -12,6 +12,7 @@
   const recognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
   const drafts = new Map(); // Solo memoria de la pestaña; nunca localStorage.
   let activeCase = null;
+  window.SINIA_DECLARATION_CONTEXT = () => activeCase ? { ...activeCase } : null;
   let recognition = null;
 
   function status(message) {
@@ -83,6 +84,7 @@
       ? "Modo demostración: podés dictar y corregir. El texto no se guarda en Supabase; copiá el borrador si querés conservarlo."
       : "El borrador se vinculará exclusivamente a este siniestro al presionar Guardar borrador.");
     showDeclarationsPanel();
+    window.dispatchEvent(new CustomEvent('sinia:declaration-open', { detail: {number, customer, description} }));
     if (!drafts.has(number)) void loadDraftForCase(number);
   }
   document.addEventListener("click", event => {
