@@ -38,6 +38,11 @@
     const location=transcript.match(/\b(en\s+(?:(?:la|el)\s+)?(?:calle|avenida|av\.?|ruta|boulevard)\s+.{3,145}?)(?=\s+a\s+las\s+\d{1,2}|\s+alrededor\s+de\s+las\s+\d{1,2}|[.,;\n]|$)/i);
     return {fecha: date?.[1]||"",hora:time?.[1]?time[1]+" hs":"",lugar:location?.[1]||""};
   }
+  function onlyClientSpeech(raw){
+    const lines=String(raw||"").split(/\n/);
+    if(!lines.some(l=>/^\s*(?:MICA|CLIENTE)\s*:/i.test(l)))return raw;
+    return lines.filter(l=>/^\s*CLIENTE\s*:/i.test(l)).map(l=>l.replace(/^\s*CLIENTE\s*:\s*/i,"").trim()).filter(Boolean).join("\n");
+  }
   function populate(force=false){
     const ctx=current(), transcript=val("transcriptText");
     if(!ctx) return;
@@ -47,7 +52,7 @@
       ["reviewSiniestro",ctx.number],["reviewFecha",extracted.fecha||claim.incident_date],
       ["reviewHora",extracted.hora],["reviewLugar",extracted.lugar||claim.incident_location],
       ["reviewAseguradora",claim.insurer],["reviewPoliza",claim.policy_number],
-      ["reviewRelato",transcript]
+      ["reviewRelato",onlyClientSpeech(transcript)]
     ];
     for(const [id,value] of pairs){const field=$(id);if(force || !field.value)field.value=value||"";}
     reviewed.checked=false;
