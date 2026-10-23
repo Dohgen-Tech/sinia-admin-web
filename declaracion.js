@@ -45,6 +45,7 @@
       const {data,error}=await client.from("sinia_demo_declarations").select("transcript,updated_at").eq("claim_number",caseNumber).maybeSingle();
       if(!error&&data&&activeCase?.number===caseNumber&&!drafts.has(caseNumber)){
         area.value=data.transcript||"";status("Declaración de prueba recuperada desde Supabase.");
+        window.dispatchEvent(new CustomEvent("sinia:declaration-loaded"));
       }
       return;
     }
@@ -57,6 +58,7 @@
       if (error || !draft || activeCase?.number !== caseNumber || drafts.has(caseNumber)) return;
       area.value = draft.transcript || "";
       status("Borrador recuperado desde Supabase. Revisalo antes de seguir.");
+      window.dispatchEvent(new CustomEvent("sinia:declaration-loaded"));
     } catch (_) {
       if (activeCase?.number === caseNumber) status("No se pudo consultar el borrador anterior. Podés transcribir o escribir manualmente.");
     }
