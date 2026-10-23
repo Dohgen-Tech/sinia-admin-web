@@ -16,6 +16,18 @@
 .declaration-title{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
 .declaration-note{margin-top:10px}
 @media(max-width:760px){.declaration-layout{grid-template-columns:1fr}}
+
+.model-actions{margin-top:16px;padding-top:16px;border-top:1px solid #cadee0;display:grid;gap:10px}
+.model-actions button{width:100%;padding:12px 10px;font-size:13px;text-align:center}
+.model-generate{background:#bde7c7!important;color:#14513b!important;border:1px solid #92d2a3!important}
+.model-generate:hover{background:#a6dcb4!important}
+.model-status{font-size:12px;color:#43646d;overflow-wrap:anywhere;line-height:1.5}
+#modelReview{margin-top:18px;padding:17px;background:#fafcfc;border:1px solid #d9e6e9;border-radius:12px}
+#modelReview h3{font-size:16px;margin:0 0 8px}
+#modelReview .formgrid{margin-top:12px}
+#modelReview textarea{min-height:110px}
+#modelReview #reviewRelato{min-height:185px}
+#modelReview p{font-size:13px;color:#566e77}
 </style></head>
 <body><header><div class="brand">◈ SINIA<small>Sistema Inteligente de Análisis de Siniestros</small></div><span class="pill">ENTORNO DE PRUEBA</span></header>
 <main class="shell"><div class="hero"><div><h1>Gestión de siniestros</h1><div class="muted">Prepará una solicitud estructurada para el agente SINIA de ChatGPT.</div></div><span class="muted">Sin datos reales · Revisión humana obligatoria</span></div>
@@ -49,6 +61,25 @@
           <button type="button" id="copyDeclaration" class="secondary">Copiar texto</button>
         </div>
         <div style="margin-top:15px"><span class="rec-status" id="recognitionState" aria-live="polite">Micrófono detenido</span><div class="live-preview" id="interimTranscript" aria-live="polite">Las frases en proceso de reconocimiento se mostrarán aquí.</div></div>
+        <section id="modelReview" hidden aria-label="Datos para completar el modelo">
+      <h3>Revisar los datos antes de generar</h3>
+      <p>Los datos encontrados en el relato se proponen automáticamente; corregilos si hace falta. Lo que falte queda como «A confirmar». No se crean hechos nuevos.</p>
+      <div class="formgrid">
+        <div><label for="reviewCliente">Nombre del asegurado</label><input id="reviewCliente"></div>
+        <div><label for="reviewSiniestro">Número de siniestro</label><input id="reviewSiniestro"></div>
+        <div><label for="reviewFecha">Fecha del hecho</label><input id="reviewFecha"></div>
+        <div><label for="reviewHora">Hora del hecho</label><input id="reviewHora"></div>
+        <div class="wide"><label for="reviewLugar">Lugar del hecho</label><input id="reviewLugar"></div>
+        <div><label for="reviewAseguradora">Compañía aseguradora</label><input id="reviewAseguradora"></div>
+        <div><label for="reviewPoliza">Número de póliza</label><input id="reviewPoliza"></div>
+        <div class="wide"><label for="reviewRelato">Relato que irá en el archivo (editable)</label><textarea id="reviewRelato"></textarea></div>
+      </div>
+      <div class="actions"><button type="button" class="secondary" id="refreshDeclarationFields">Actualizar propuestas desde la transcripción</button></div>
+      <label style="font-weight:400;margin-top:15px;display:flex;gap:8px;align-items:start">
+        <input type="checkbox" id="modelReviewed" style="width:auto;margin-top:3px">
+        Revisé los campos y confirmo que el texto reproduce lo declarado. El archivo será un borrador para revisión del asegurado y de Mica.
+      </label>
+    </section>
         <p class="notice" id="declarationFeedback" role="status">Las transcripciones se pueden corregir antes de guardar. En el modo demostración no se almacenan en Supabase.</p>
       </div>
       <aside class="declaration-sidebar">
@@ -58,6 +89,12 @@
         <p>Idioma: español (Argentina). El reconocimiento de Chrome puede depender de servicios externos e internet; no se almacena audio en esta página.</p>
         <p><strong>Estado:</strong> Borrador, pendiente de revisión por Mica y por el asegurado.</p>
         <p><strong>Importante:</strong> no cargar declaraciones reales con el acceso público de demostración.</p>
+        <div class="model-actions">
+          <button type="button" id="uploadDeclarationModel" class="secondary">📄 Cargar modelo de declaración</button>
+          <input type="file" id="declarationModelFile" accept=".docx,.pdf" hidden>
+          <button type="button" class="model-generate" id="generateDeclarationFile">Generar archivo de declaración</button>
+          <div class="model-status" id="declarationModelStatus" role="status">Elegí un archivo Word (.docx) con campos {cliente}, {relato}, etc., o un PDF con campos editables.</div>
+        </div>
       </aside>
     </div>
   </div>
@@ -74,4 +111,8 @@ document.querySelector("#adjuntos").addEventListener("change",e=>{document.query
 document.querySelector("#caseCards").innerHTML=cases.map(c=>'<div class="case"><span class="id">'+c[0]+'</span><strong>'+c[1]+'</strong><p class="muted">'+c[2]+'</p><span class="status">Caso ficticio</span><div class="actions"><button data-case="'+c[0]+'" class="secondary">Usar este caso</button><button data-declaration="'+c[0]+'">Tomar declaración</button></div></div>').join("");
 document.querySelectorAll("[data-case]").forEach(b=>b.addEventListener("click",()=>{document.querySelector("#id").value=b.dataset.case;document.querySelector("[data-tab=nuevo]").click();document.querySelector("#id").focus();}));
 document.querySelector("#siniaForm").addEventListener("submit",async e=>{e.preventDefault();const v=id=>document.getElementById(id).value.trim();const prompt='SINIA — Procesá integralmente el siniestro '+v("id")+'.\\nCliente: '+(v("cliente")||"buscar en Drive")+'.\\nNúmero de cliente: '+(v("num")||"buscar en Drive")+'.\\nRamo: '+(v("ramo")||"verificar en póliza")+'.\\nObservaciones: '+(v("nota")||"ninguna")+'.\\nSeguí exclusivamente las instrucciones permanentes del proyecto SINIA. Buscá al cliente y la póliza en el Drive autorizado, verificá vigencia y endosos, encontrá el relato, prepará declaración en borrador, evaluá por separado procedencia, responsabilidad y cobertura con fundamentos y cláusulas identificables, generá informe en 05-INFORMES y actualizá únicamente la fila del siniestro en el tablero. Dejá «Pendiente revisión Mica». No inventes pruebas ni cobertura ni modifiques otros archivos.';const m=document.getElementById("message");try{await navigator.clipboard.writeText(prompt.replaceAll("\\n","\n"));m.textContent="Solicitud copiada. Abrí tu proyecto SINIA en ChatGPT y pegala para iniciar el análisis."}catch{m.textContent="El navegador bloqueó el portapapeles. Copiá esta solicitud: "+prompt.replaceAll("\\n","\n");}});
-</script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script><script src="config.js"></script><script src="sinia-app.js"></script><script src="declaracion.js"></script></body></html>
+</script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script><script src="config.js"></script><script src="sinia-app.js"></script><script src="declaracion.js"></script>
+<script src="https://unpkg.com/pizzip@3.2.0/dist/pizzip.js"></script>
+<script src="https://unpkg.com/docxtemplater@3.71.0/build/docxtemplater.js"></script>
+<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<script src="modelo-declaracion.js"></script></body></html>
