@@ -2,16 +2,54 @@
 const cfg=window.SINIA_CONFIG||{};const ready=!!(cfg.supabaseUrl&&cfg.supabasePublishableKey&&window.supabase);
 const client=ready?window.supabase.createClient(cfg.supabaseUrl,cfg.supabasePublishableKey):null;
 let demoSession=false;
-window.SINIA_RUNTIME={getClient:()=>client,isDemo:()=>demoSession,isReady:()=>ready};
+let userRole=null;
+window.SINIA_RUNTIME={getClient:()=>client,isDemo:()=>demoSession,isReady:()=>ready,isSandbox:()=>userRole==="demo",getRole:()=>userRole};
 const overlay=document.createElement("div");overlay.id="authGate";overlay.style.cssText="position:fixed;inset:0;background:#092b3ae8;display:grid;place-items:center;z-index:99;padding:20px";
 overlay.innerHTML='<div style="background:#fff;max-width:420px;width:100%;border-radius:18px;padding:28px;box-shadow:0 24px 60px #0004"><h1 style="margin:0 0 4px">◈ SINIA</h1><p style="color:#68808b">Acceso al panel administrativo</p><form id="loginSINIA"><label for="uSINIA">Usuario</label><input id="uSINIA" autocomplete="username" required placeholder="'+(ready?'Correo electrónico o 123456 (demo)':'Usuario de demostración')+'"><label for="pSINIA" style="margin-top:14px">Contraseña</label><input id="pSINIA" type="password" autocomplete="current-password" required><button style="width:100%;margin-top:20px" type="submit">Ingresar</button><p id="authError" role="alert" style="color:#9d3737;font-size:13px"></p><p style="font-size:12px;color:#7c8790">'+(ready?'Para probar la interfaz: 123456 / 123456 (sin acceso a los datos). Para guardar datos es necesario un usuario autorizado en Supabase.':'MODO DEMOSTRACIÓN: 123456 / 123456. No guarda datos reales.')+'</p></form></div>';
 document.body.appendChild(overlay);
 const badge=document.createElement("div");badge.className="notice";badge.textContent=ready?'SINIA conectado a Supabase: acceso autenticado y almacenamiento restringido a usuarios habilitados.':'SINIA en modo demostración. La web es pública, el usuario 123456 no protege información real. Subidas y guardado en Supabase desactivados.';document.querySelector(".hero").after(badge);
 if(ready){const submit=document.querySelector("#siniaForm button[type=submit]");if(submit)submit.textContent="Guardar siniestro en Supabase";}
 const login=document.getElementById("loginSINIA");
-function enter(){overlay.style.display="none";const b=document.createElement("button");b.className="secondary";b.textContent="Cerrar sesión";b.style.marginLeft="12px";document.querySelector(".hero").appendChild(b);b.addEventListener("click",async()=>{if(client)await client.auth.signOut();location.reload()});if(ready&&!demoSession)loadData();window.dispatchEvent(new CustomEvent("sinia:session",{detail:{demo:demoSession,authenticated:ready&&!demoSession}}));}
-login.addEventListener("submit",async e=>{e.preventDefault();const u=document.getElementById("uSINIA").value.trim(),p=document.getElementById("pSINIA").value,err=document.getElementById("authError");err.textContent="";if(u==="123456"&&p==="123456"){demoSession=true;enter();return;}if(!ready){err.textContent="Credenciales de demostración incorrectas.";return;}const {error}=await client.auth.signInWithPassword({email:u,password:p});if(error){err.textContent="No se pudo iniciar sesión.";return;}const {data}=await client.from("sinia_members").select("user_id").limit(1);if(!data?.length){await client.auth.signOut();err.textContent="Cuenta no habilitada para SINIA.";return;}enter();});
-if(ready)client.auth.getSession().then(async ({data})=>{if(data.session){const m=await client.from("sinia_members").select("user_id").limit(1);if(m.data?.length)enter();}});
+const signUpButton=document.createElement("button");signUpButton.type="button";signUpButton.className="secondary";signUpButton.style.cssText="width:100%;margin-top:10px";signUpButton.textContent="Crear usuario de pruebas en Supabase";
+login.querySelector("button[type=submit]").after(signUpButton);
+const accessInfo=document.createElement("p");accessInfo.style.cssText="font-size:12px;color:#546d78";
+accessInfo.textContent="Para GUARDAR datos, registrate con tu correo y una contraseña segura (12 caracteres como mínimo). El acceso 123456/123456 sirve solo para mirar.";
+signUpButton.after(accessInfo);
+signUpButton.addEventListener("click",async()=>{
+ const email=document.getElementById("uSINIA").value.trim(),password=document.getElementById("pSINIA").value,err=document.getElementById("authError");
+ if(!ready)return void(err.textContent="Supabase no está conectado.");
+ if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))return void(err.textContent="Para registrarte, escribí tu correo electrónico en Usuario.");
+ if(password.length<12)return void(err.textContent="Usá una contraseña segura de al menos 12 caracteres.");
+ signUpButton.disabled=true;err.textContent="Registrando usuario de prueba...";
+ try{const res=await client.auth.signUp({email,password});if(res.error)throw res.error;err.textContent=res.data.session?"Usuario creado. Ingresá con tu correo para guardar datos.":"Cuenta creada. Revisá tu correo y confirmá el registro; después volvé e ingresá.";if(res.data.session){const m=await client.from("sinia_members").select("role").maybeSingle();if(m.data?.role==="demo"){demoSession=false;userRole="demo";enter();}}}
+ catch(e){err.textContent="No se pudo crear el acceso: "+(e.message||"error");}
+ finally{signUpButton.disabled=false;}
+});
+function enter(){
+ overlay.style.display="none";
+ badge.textContent=userRole==="demo"?"SINIA SANDBOX: guardado en Supabase SOLO para casos ficticios. No ingreses clientes reales.":demoSession?"Vista pública de demostración. No se guardarán datos.":"SINIA autenticado: datos privados protegidos.";
+ const b=document.createElement("button");b.className="secondary";b.textContent="Cerrar sesión";b.style.marginLeft="12px";document.querySelector(".hero").appendChild(b);
+ b.addEventListener("click",async()=>{if(client)await client.auth.signOut();location.reload();});
+ const submit=document.querySelector("#siniaForm button[type=submit]");if(submit)submit.textContent=userRole==="demo"?"Guardar siniestro de prueba":demoSession?"Copiar solicitud para ChatGPT":"Guardar siniestro en Supabase";
+ if(ready&&!demoSession)loadData();
+ window.dispatchEvent(new CustomEvent("sinia:session",{detail:{demo:demoSession,authenticated:ready&&!demoSession,role:userRole}}));
+}
+login.addEventListener("submit",async e=>{
+ e.preventDefault();
+ const u=document.getElementById("uSINIA").value.trim(),p=document.getElementById("pSINIA").value,err=document.getElementById("authError");err.textContent="";
+ if((u==="123456"||u==="123406")&&p==="123456"){demoSession=true;userRole=null;enter();return;}
+ if(!ready){err.textContent="No está conectada la base de datos.";return;}
+ const {error}=await client.auth.signInWithPassword({email:u,password:p});
+ if(error){err.textContent="No se pudo iniciar sesión. Comprobá el correo y la contraseña.";return;}
+ const {data, error:memberError}=await client.from("sinia_members").select("role").maybeSingle();
+ if(memberError||!data){await client.auth.signOut();err.textContent="Cuenta sin acceso autorizado.";return;}
+ demoSession=false;userRole=data.role;enter();
+});
+if(ready)client.auth.getSession().then(async({data})=>{
+ if(!data.session)return;
+ const m=await client.from("sinia_members").select("role").maybeSingle();
+ if(m.data?.role){demoSession=false;userRole=m.data.role;enter();}
+});
 const extras=document.createElement("div");extras.className="formgrid";extras.style.marginTop="14px";extras.innerHTML='<div><label for="insurerSINIA">Compañía aseguradora</label><input id="insurerSINIA" placeholder="Nombre de la compañía"></div><div><label for="policySINIA">Número de póliza</label><input id="policySINIA" placeholder="Póliza"></div><div><label for="dateSINIA">Fecha del siniestro</label><input id="dateSINIA" type="date"></div><div><label for="placeSINIA">Lugar del hecho</label><input id="placeSINIA" placeholder="Dirección"></div><div class="wide"><label for="descSINIA">Descripción del siniestro</label><textarea id="descSINIA" placeholder="Relato y hechos conocidos"></textarea></div><div><label for="liabilitySINIA">Responsabilidad preliminar</label><select id="liabilitySINIA"><option>A determinar</option><option>Sí probable</option><option>No probable</option><option>Parcial</option></select></div><div><label for="coverageSINIA">Cobertura preliminar</label><select id="coverageSINIA"><option>A determinar</option><option>Sí probable</option><option>No probable</option><option>Parcial</option></select></div><div class="wide"><label for="reasonSINIA">Fundamentos y cláusulas</label><textarea id="reasonSINIA" placeholder="Sin inventar cláusulas ni conclusiones"></textarea></div>';
 document.querySelector("#siniaForm .formgrid").appendChild(extras);
 const uploadPanel=document.createElement("div");uploadPanel.className="notice";uploadPanel.innerHTML='<h2>Archivo del siniestro</h2><label for="driveLinkSINIA">Enlace a documento de Drive (alternativa sin subida)</label><input id="driveLinkSINIA" type="url" placeholder="https://drive.google.com/..."><label for="fileCategorySINIA">Tipo de documento</label><select id="fileCategorySINIA"><option>Prueba documental</option><option>Condiciones generales</option><option>Condiciones particulares</option><option>Endoso</option><option>Declaración</option><option>Informe</option></select><button type="button" id="saveDocumentSINIA" class="secondary" style="margin-top:10px">Guardar documento en SINIA</button><div id="uploadStatus" role="status" style="margin-top:8px"></div>';document.querySelector("#siniaForm").appendChild(uploadPanel);
