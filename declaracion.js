@@ -14,6 +14,20 @@
   let activeCase = null;
   window.SINIA_DECLARATION_CONTEXT = () => activeCase ? { ...activeCase } : null;
   let recognition = null;
+  let selectedSpeaker = "MICA";
+  let resumeOnSwitch = false;
+  function setSpeaker(next){
+    if(next===selectedSpeaker)return;
+    selectedSpeaker=next;
+    get("speakerMica").classList.toggle("speaker-active",next==="MICA");
+    get("speakerCliente").classList.toggle("speaker-active",next==="CLIENTE");
+    get("speakerMica").setAttribute("aria-pressed",String(next==="MICA"));
+    get("speakerCliente").setAttribute("aria-pressed",String(next==="CLIENTE"));
+    if(recognition){resumeOnSwitch=true;try{recognition.stop();}catch(_){resumeOnSwitch=false;}}
+    else status("Seleccionado: "+next+". Iniciá la transcripción o continuá escribiendo.");
+  }
+  get("speakerMica").addEventListener("click",()=>setSpeaker("MICA"));
+  get("speakerCliente").addEventListener("click",()=>setSpeaker("CLIENTE"));
 
   function status(message) {
     feedback.textContent = message;
@@ -22,6 +36,7 @@
     if (activeCase) drafts.set(activeCase.number, area.value);
   }
   function endRecording() {
+    resumeOnSwitch=false;
     if (!recognition) return;
     const session = recognition;
     recognition = null;
@@ -118,6 +133,7 @@
     session.maxAlternatives = 1;
     const caseNumber = activeCase.number;
     const originalText = area.value.trim();
+    const thisSpeaker=selectedSpeaker;
     recognition = session;
     area.readOnly = true;
     startButton.disabled = true;
@@ -135,7 +151,7 @@
         if (!text) continue;
         (result.isFinal ? finalParts : interimParts).push(text);
       }
-      area.value = [originalText, finalParts.join(" ")].filter(Boolean).join(originalText ? "\n" : "");
+      area.value = [originalText, finalParts.length?thisSpeaker+": "+finalParts.join(" "):""].filter(Boolean).join(originalText ? "\n" : "");
       preview.textContent = interimParts.join(" ") || "Escuchando...";
       drafts.set(caseNumber, area.value);
     };
@@ -153,6 +169,7 @@
       indicator.textContent = "Micrófono detenido";
       indicator.classList.remove("recording");
       if (activeCase?.number === caseNumber) preview.textContent = "Transcripción detenida. Podés corregir el texto y volver a iniciar.";
+      if(resumeOnSwitch && activeCase?.number===caseNumber){resumeOnSwitch=false;startButton.click();}
     };
     try { session.start(); }
     catch (err) {
